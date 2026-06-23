@@ -153,6 +153,15 @@ export function addStudent(partial = {}) {
   return student;
 }
 
+export function deleteStudent(id) {
+  const db = ensureLoaded();
+  const idx = db.students.findIndex((s) => s.id === id);
+  if (idx === -1) return false;
+  db.students.splice(idx, 1);
+  persist();
+  return true;
+}
+
 export function addComment(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;

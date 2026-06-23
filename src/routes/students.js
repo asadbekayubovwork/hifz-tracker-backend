@@ -34,6 +34,13 @@ router.post("/", requireAuth, requireTeacher, (req, res) => {
   res.status(201).json({ student: sanitize(student, req.user.role) });
 });
 
+// DELETE /api/students/:id  (teacher) — remove a student
+router.delete("/:id", requireAuth, requireTeacher, (req, res) => {
+  const ok = db.deleteStudent(req.params.id);
+  if (!ok) return res.status(404).json({ error: "O'quvchi topilmadi." });
+  res.json({ ok: true });
+});
+
 // PATCH /api/students/:id/suras/:num  (teacher) — set or cycle a sura's status
 // Body: { status?: "none" | "progress" | "memorized" }. Omit to cycle.
 router.patch("/:id/suras/:num", requireAuth, requireTeacher, (req, res) => {
