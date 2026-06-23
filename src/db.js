@@ -51,6 +51,33 @@ export function getStudent(id) {
   return getStudents().find((s) => s.id === id) || null;
 }
 
+// Normalize a login/username: lowercase, trimmed, safe characters only.
+export function normUsername(s) {
+  return (s ?? "").toString().trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "");
+}
+
+// A student's effective login — explicit `username`, falling back to `id` for
+// records created before usernames existed.
+function loginOf(s) {
+  return s.username || s.id;
+}
+
+// A student's effective password — explicit `password`, falling back to login.
+function passwordOf(s) {
+  return s.password || loginOf(s);
+}
+
+export function getStudentByUsername(username) {
+  const u = normUsername(username);
+  if (!u) return null;
+  return getStudents().find((s) => loginOf(s) === u) || null;
+}
+
+// True when `password` matches the student's stored (or fallback) password.
+export function checkStudentPassword(student, password) {
+  return student && passwordOf(student) === (password ?? "").toString();
+}
+
 const STATUS_CYCLE = ["none", "progress", "memorized"];
 const VALID_STATUS = new Set(STATUS_CYCLE);
 
@@ -89,15 +116,29 @@ function uniqueId(db, base) {
   return id;
 }
 
+function uniqueUsername(db, base) {
+  const root = base || "oquvchi";
+  let u = root;
+  let i = 2;
+  while (db.students.some((s) => (s.username || s.id) === u)) u = `${root}${i++}`;
+  return u;
+}
+
 export function addStudent(partial = {}) {
   const db = ensureLoaded();
   const name = (partial.name || "").trim() || "Yangi o'quvchi";
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "oquvchi";
   const id = partial.id || uniqueId(db, slug);
+  // Login: explicit username, else derived from the name. Password defaults to
+  // the username (admin tells the student "login = parol = <username>").
+  const username = uniqueUsername(db, normUsername(partial.username) || normUsername(slug) || "oquvchi");
+  const password = (partial.password ? partial.password.toString() : "") || username;
   const status = {};
   for (let n = 1; n <= 114; n++) status[n] = "none";
   const student = {
     id,
+    username,
+    password,
     name,
     initials: partial.initials || initialsFrom(name),
     color: partial.color || STUDENT_COLORS[db.students.length % STUDENT_COLORS.length],

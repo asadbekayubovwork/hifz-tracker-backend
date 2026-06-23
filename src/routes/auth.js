@@ -1,35 +1,27 @@
 import { Router } from "express";
 import { signToken, requireAuth } from "../auth.js";
-import { TEACHER_PASSWORD, TEACHER_NAME, TEACHER_ROLE_LABEL } from "../config.js";
-import { getStudent, getStudents } from "../db.js";
+import { TEACHER_USERNAME, TEACHER_PASSWORD, TEACHER_NAME, TEACHER_ROLE_LABEL } from "../config.js";
+import { getStudent, getStudentByUsername, checkStudentPassword, normUsername } from "../db.js";
 
 const router = Router();
 
-// GET /api/auth/students — public roster for the login picker (no progress data).
-router.get("/students", (_req, res) => {
-  const roster = getStudents().map(({ id, name, initials, color, joined }) => ({
-    id, name, initials, color, joined,
-  }));
-  res.json({ students: roster });
-});
-
-// POST /api/auth/login/teacher  { password }
+// POST /api/auth/login/teacher  { username, password }
 router.post("/login/teacher", (req, res) => {
-  const { password } = req.body || {};
-  if (password !== TEACHER_PASSWORD) {
-    return res.status(401).json({ error: "Parol noto'g'ri." });
+  const { username, password } = req.body || {};
+  if (normUsername(username) !== TEACHER_USERNAME || password !== TEACHER_PASSWORD) {
+    return res.status(401).json({ error: "Login yoki parol noto'g'ri." });
   }
   const user = { role: "teacher", name: TEACHER_NAME, roleLabel: TEACHER_ROLE_LABEL, initials: "A" };
   const token = signToken(user);
   res.json({ token, user });
 });
 
-// POST /api/auth/login/student  { studentId }
+// POST /api/auth/login/student  { username, password }
 router.post("/login/student", (req, res) => {
-  const { studentId } = req.body || {};
-  const student = getStudent(studentId);
-  if (!student) {
-    return res.status(404).json({ error: "Bunday o'quvchi topilmadi." });
+  const { username, password } = req.body || {};
+  const student = getStudentByUsername(username);
+  if (!student || !checkStudentPassword(student, password)) {
+    return res.status(401).json({ error: "Login yoki parol noto'g'ri." });
   }
   const user = {
     role: "student", studentId: student.id, name: student.name,

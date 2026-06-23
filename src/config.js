@@ -5,8 +5,9 @@ export const PORT = Number(process.env.PORT) || 4000;
 export const JWT_SECRET = process.env.JWT_SECRET || "hifz-maktab-dev-secret-change-me";
 export const TOKEN_TTL = process.env.TOKEN_TTL || "7d";
 
-// Demo teacher credentials. In production seed a real user / hashed password.
-export const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "ustoz";
+// Teacher (admin) credentials. Override via env in production.
+export const TEACHER_USERNAME = (process.env.TEACHER_USERNAME || "admin").trim().toLowerCase();
+export const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "admin";
 export const TEACHER_NAME = "Ustoz Abdulloh";
 export const TEACHER_ROLE_LABEL = "Murabbiy";
 
