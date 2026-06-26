@@ -40,6 +40,12 @@ export const SURAS = [
   [112, "الإخلاص", "Al-Ixlos", 4], [113, "الفلق", "Al-Falaq", 5], [114, "الناس", "An-Nos", 6],
 ];
 
+// Ayah count per sura number, e.g. AYAH_COUNTS[2] === 286.
+export const AYAH_COUNTS = Object.fromEntries(SURAS.map(([num, , , ay]) => [num, ay]));
+
+// Total ayahs across the whole Qur'an (6236) — denominator for fair progress.
+export const TOTAL_AYAHS = SURAS.reduce((sum, [, , , ay]) => sum + ay, 0);
+
 // Color palette assigned to new students in order, cycling when exhausted.
 export const STUDENT_COLORS = ["#14694F", "#1F6F8B", "#8A6D3B", "#5B7B4C", "#7A4F6D", "#B05A3C", "#3F6CA8"];
 

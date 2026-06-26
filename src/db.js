@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildInitialStudents, STUDENT_COLORS } from "./seedData.js";
+import { buildInitialStudents, STUDENT_COLORS, AYAH_COUNTS } from "./seedData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
@@ -26,7 +26,30 @@ function ensureLoaded() {
     cache = defaultData();
     persist();
   }
+  if (migrateAyahs(cache)) persist();
   return cache;
+}
+
+// Migrate legacy per-sura status maps to per-ayah memorized counts.
+// Runs once: a student already carrying `ayahs` is left untouched.
+//   memorized -> full ayah count   progress -> ~half (teacher refines)   none -> 0
+// Returns true if any student was migrated (so the caller can persist).
+function migrateAyahs(db) {
+  let changed = false;
+  for (const student of db.students) {
+    if (student.ayahs && typeof student.ayahs === "object") continue;
+    const status = student.status || {};
+    const ayahs = {};
+    for (let n = 1; n <= 114; n++) {
+      const full = AYAH_COUNTS[n];
+      const s = status[n] || "none";
+      ayahs[n] = s === "memorized" ? full : s === "progress" ? Math.round(full / 2) : 0;
+    }
+    student.ayahs = ayahs;
+    delete student.status;
+    changed = true;
+  }
+  return changed;
 }
 
 function persist() {
@@ -78,27 +101,41 @@ export function checkStudentPassword(student, password) {
   return student && passwordOf(student) === (password ?? "").toString();
 }
 
-const STATUS_CYCLE = ["none", "progress", "memorized"];
-const VALID_STATUS = new Set(STATUS_CYCLE);
-
-// Set a sura's status; if `status` is undefined, cycle to the next state.
-export function setSuraStatus(id, num, status) {
+// Set how many ayahs of a sura the student has memorized (0..ayahCount).
+// Out-of-range counts are clamped. This is the source of truth; the three
+// display states (none / progress / memorized) are derived from it.
+export function setSuraAyahs(id, num, count) {
   const db = ensureLoaded();
   const student = db.students.find((s) => s.id === id);
   if (!student) return null;
   if (num < 1 || num > 114) return null;
-
-  let next;
-  if (status === undefined) {
-    const cur = student.status[num] || "none";
-    next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % 3];
-  } else {
-    if (!VALID_STATUS.has(status)) return null;
-    next = status;
-  }
-  student.status = { ...student.status, [num]: next };
+  const full = AYAH_COUNTS[num];
+  let c = Math.round(Number(count));
+  if (!Number.isFinite(c)) return null;
+  c = Math.max(0, Math.min(full, c));
+  student.ayahs = { ...(student.ayahs || {}), [num]: c };
   persist();
   return student;
+}
+
+const VALID_STATUS = new Set(["none", "progress", "memorized"]);
+
+// Legacy-friendly setter: map a status keyword to an ayah count, or (when
+// `status` is undefined) toggle between empty and fully memorized.
+export function setSuraStatus(id, num, status) {
+  if (num < 1 || num > 114) return null;
+  const full = AYAH_COUNTS[num];
+  let count;
+  if (status === "memorized") count = full;
+  else if (status === "progress") count = Math.round(full / 2);
+  else if (status === "none") count = 0;
+  else if (status === undefined) {
+    const cur = getStudent(id)?.ayahs?.[num] || 0;
+    count = cur >= full ? 0 : full;
+  } else if (!VALID_STATUS.has(status)) {
+    return null;
+  }
+  return setSuraAyahs(id, num, count);
 }
 
 // Derive 1–2 letter initials from a name (e.g. "Ali Valiyev" -> "AV").
@@ -133,8 +170,8 @@ export function addStudent(partial = {}) {
   // the username (admin tells the student "login = parol = <username>").
   const username = uniqueUsername(db, normUsername(partial.username) || normUsername(slug) || "oquvchi");
   const password = (partial.password ? partial.password.toString() : "") || username;
-  const status = {};
-  for (let n = 1; n <= 114; n++) status[n] = "none";
+  const ayahs = {};
+  for (let n = 1; n <= 114; n++) ayahs[n] = 0;
   const student = {
     id,
     username,
@@ -144,7 +181,7 @@ export function addStudent(partial = {}) {
     color: partial.color || STUDENT_COLORS[db.students.length % STUDENT_COLORS.length],
     joined: partial.joined || "Bugun",
     grade: partial.grade || "—",
-    status,
+    ayahs,
     activity: [],
     comments: [],
   };

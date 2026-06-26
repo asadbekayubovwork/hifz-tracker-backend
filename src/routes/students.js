@@ -53,6 +53,22 @@ router.patch("/:id/suras/:num", requireAuth, requireTeacher, (req, res) => {
   res.json({ student: sanitize(student, req.user.role) });
 });
 
+// PATCH /api/students/:id/suras/:num/ayahs  (teacher) — set memorized ayah count
+// Body: { count: number }. Clamped to 0..ayahCount on the server.
+router.patch("/:id/suras/:num/ayahs", requireAuth, requireTeacher, (req, res) => {
+  const num = Number(req.params.num);
+  if (!Number.isInteger(num) || num < 1 || num > 114) {
+    return res.status(400).json({ error: "Sura raqami 1 dan 114 gacha bo'lishi kerak." });
+  }
+  const count = Number(req.body?.count);
+  if (!Number.isFinite(count) || count < 0) {
+    return res.status(400).json({ error: "Oyat soni noto'g'ri." });
+  }
+  const student = db.setSuraAyahs(req.params.id, num, count);
+  if (!student) return res.status(404).json({ error: "O'quvchi topilmadi." });
+  res.json({ student: sanitize(student, req.user.role) });
+});
+
 // POST /api/students/:id/comments  (teacher) — add a comment
 router.post("/:id/comments", requireAuth, requireTeacher, (req, res) => {
   const student = db.addComment(req.params.id, req.body?.text);
